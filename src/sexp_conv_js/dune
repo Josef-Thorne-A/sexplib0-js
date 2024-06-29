@@ -1,0 +1,6 @@
+(library
+(name sexplib_conv_js)
+(public_name sexplib0.sexp_conv_js)
+(preprocess (pps melange.ppx))
+(modes melange)
+(implements sexplib0.sexp_conv))

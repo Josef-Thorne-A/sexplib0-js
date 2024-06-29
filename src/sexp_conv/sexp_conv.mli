@@ -1,5 +1,15 @@
 (** Utility Module for S-expression Conversions *)
 
+(** Dummy definitions for "optional" options, lists, and for opaque types *)
+type sexp_bool = bool [@@deprecated "[since 2019-03] use [@sexp.bool] instead"]
+
+type 'a sexp_option = 'a option
+[@@deprecated "[since 2019-03] use [@sexp.option] instead"]
+
+type 'a sexp_list = 'a list [@@deprecated "[since 2019-03] use [@sexp.list] instead"]
+type 'a sexp_array = 'a array [@@deprecated "[since 2019-03] use [@sexp.array] instead"]
+type 'a sexp_opaque = 'a [@@deprecated "[since 2019-03] use [@sexp.opaque] instead"]
+
 (** {6 Conversion of OCaml-values to S-expressions} *)
 
 (** [default_string_of_float] reference to the default function used
@@ -37,11 +47,11 @@ val sexp_of_unit : unit -> Sexp.t
     S-expression. *)
 val sexp_of_bool : bool -> Sexp.t
 
-(** [sexp_of_string str] converts the value [str] of type [string] to an
+(** [sexp_of_bool str] converts the value [str] of type [string] to an
     S-expression. *)
 val sexp_of_string : string -> Sexp.t
 
-(** [sexp_of_bytes str] converts the value [str] of type [bytes] to an
+(** [sexp_of_bool str] converts the value [str] of type [bytes] to an
     S-expression. *)
 val sexp_of_bytes : bytes -> Sexp.t
 
@@ -66,8 +76,9 @@ val sexp_of_int32 : int32 -> Sexp.t
 val sexp_of_int64 : int64 -> Sexp.t
 
 (** [sexp_of_nativeint n] converts the value [n] of type [nativeint] to an
-    S-expression. *)
-val sexp_of_nativeint : nativeint -> Sexp.t
+    S-expression.
+    Nativeint does not exist in ReScript, converts to [int32] instead. *)
+val sexp_of_nativeint : int32 -> Sexp.t
 
 (** [sexp_of_ref conv r] converts the value [r] of type ['a ref] to
     an S-expression.  Uses [conv] to convert values of type ['a] to an
@@ -178,8 +189,9 @@ val int32_of_sexp : Sexp.t -> int32
 val int64_of_sexp : Sexp.t -> int64
 
 (** [nativeint_of_sexp sexp] converts S-expression [sexp] to a value
-    of type [nativeint]. *)
-val nativeint_of_sexp : Sexp.t -> nativeint
+    of type [nativeint].
+    Nativeint does not exist in ReScript, converts to [int32] instead. *)
+val nativeint_of_sexp : Sexp.t -> int32
 
 (** [ref_of_sexp conv sexp] converts S-expression [sexp] to a value
     of type ['a ref] using conversion function [conv], which converts
@@ -266,10 +278,18 @@ val printexc_prefer_sexp : exn -> string
 val sexp_of_exn_opt : exn -> Sexp.t option
 
 module Exn_converter : sig
-  (** [add constructor sexp_of_exn] registers exception S-expression
+  val add_auto : ?finalise:bool -> exn -> (exn -> Sexp.t) -> unit
+  [@@deprecated "[since 2016-07] use Conv.Exn_converter.add"]
+
+  (** [add ?finalise constructor sexp_of_exn] registers exception S-expression
       converter [sexp_of_exn] for exceptions with the given [constructor].
 
-      NOTE: [finalise] is ignored, and provided only for backward compatibility. *)
+      NOTE: If [finalise] is [true], then the exception will be automatically
+      registered for removal with the GC (default).  Finalisation will not work
+      with exceptions that have been allocated outside the heap, which is the
+      case for some standard ones e.g. [Sys_error].
+
+      @param finalise default = [true] *)
   val add
     :  ?printexc:bool
     -> ?finalise:bool

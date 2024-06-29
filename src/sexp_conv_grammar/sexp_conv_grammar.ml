@@ -1,26 +1,15 @@
-open StdLabels
-
-let sexp_grammar_with_tags grammar ~tags =
-  List.fold_right tags ~init:grammar ~f:(fun (key, value) grammar ->
-    Sexp_grammar.Tagged { key; value; grammar })
-;;
-
-let sexp_grammar_with_tag_list x ~tags =
-  List.fold_right tags ~init:x ~f:(fun (key, value) grammar ->
-    Sexp_grammar.Tag { key; value; grammar })
-;;
-
 let unit_sexp_grammar : unit Sexp_grammar.t = { untyped = List Empty }
 let bool_sexp_grammar : bool Sexp_grammar.t = { untyped = Bool }
 let string_sexp_grammar : string Sexp_grammar.t = { untyped = String }
 let bytes_sexp_grammar : bytes Sexp_grammar.t = { untyped = String }
 let char_sexp_grammar : char Sexp_grammar.t = { untyped = Char }
+let sexp_t_sexp_grammar : Sexp.t Sexp_grammar.t = { untyped = Any "Sexp.t" }
 let int_sexp_grammar : int Sexp_grammar.t = { untyped = Integer }
 let float_sexp_grammar : float Sexp_grammar.t = { untyped = Float }
 let int32_sexp_grammar : int32 Sexp_grammar.t = { untyped = Integer }
 let int64_sexp_grammar : int64 Sexp_grammar.t = { untyped = Integer }
-let nativeint_sexp_grammar : nativeint Sexp_grammar.t = { untyped = Integer }
-let sexp_t_sexp_grammar : Sexp.t Sexp_grammar.t = { untyped = Any "Sexp.t" }
+(* Nativeint is not supported in ReScript *)
+let nativeint_sexp_grammar : int32 Sexp_grammar.t = { untyped = Integer }
 let ref_sexp_grammar grammar = Sexp_grammar.coerce grammar
 let lazy_t_sexp_grammar grammar = Sexp_grammar.coerce grammar
 

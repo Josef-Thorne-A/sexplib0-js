@@ -1,5 +1,6 @@
 (library
  (name sexplib0)
  (public_name sexplib0)
- (preprocess no_preprocessing)
+ (modes melange native)
+ (libraries sexp sexp_conv sexp_conv_grammar sexpable)
  (ocamlopt_flags :standard -O3))

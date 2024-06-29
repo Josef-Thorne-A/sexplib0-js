@@ -1,0 +1,6 @@
+(library
+ (name sexpable)
+ (public_name sexplib0.sexpable)
+(modes native melange)
+ (libraries sexp)
+ (synopsis ""))

@@ -5,6 +5,12 @@ open MoreLabels
 open Printf
 open Sexp
 
+type sexp_bool = bool
+type 'a sexp_option = 'a option
+type 'a sexp_list = 'a list
+type 'a sexp_array = 'a array
+type 'a sexp_opaque = 'a
+
 (* Conversion of OCaml-values to S-expressions *)
 external format_float : string -> float -> string = "caml_format_float"
 
@@ -14,7 +20,7 @@ external format_float : string -> float -> string = "caml_format_float"
    which was converted from a decimal (string) with <= 15 significant digits.  So it's
    worth trying first to avoid things like "3.1400000000000001".
 
-   See comment above [to_string_round_trippable] in {!Core.Float} for
+   See comment above [to_string_round_trippable] in {!Core_kernel.Float} for
    detailed explanation and examples. *)
 let default_string_of_float =
   ref (fun x ->
@@ -24,7 +30,7 @@ let default_string_of_float =
 
 let read_old_option_format = ref true
 let write_old_option_format = ref true
-let list_map f l = List.map l ~f
+let list_map f l = List.rev (List.rev_map l ~f)
 let sexp_of_unit () = List []
 let sexp_of_bool b = Atom (string_of_bool b)
 let sexp_of_string str = Atom str
@@ -34,7 +40,8 @@ let sexp_of_int n = Atom (string_of_int n)
 let sexp_of_float n = Atom (!default_string_of_float n)
 let sexp_of_int32 n = Atom (Int32.to_string n)
 let sexp_of_int64 n = Atom (Int64.to_string n)
-let sexp_of_nativeint n = Atom (Nativeint.to_string n)
+(* Nativeint does not exist in ReScript *)
+let sexp_of_nativeint n = Atom (Int32.to_string n)
 let sexp_of_ref sexp_of__a rf = sexp_of__a !rf
 let sexp_of_lazy_t sexp_of__a lv = sexp_of__a (Lazy.force lv)
 
@@ -51,7 +58,9 @@ let sexp_of_triple sexp_of__a sexp_of__b sexp_of__c (a, b, c) =
   List [ sexp_of__a a; sexp_of__b b; sexp_of__c c ]
 ;;
 
-let sexp_of_list sexp_of__a lst = List (List.map lst ~f:sexp_of__a)
+(* List.rev (List.rev_map ...) is tail recursive, the OCaml standard
+   library List.map is NOT. *)
+let sexp_of_list sexp_of__a lst = List (List.rev (List.rev_map lst ~f:sexp_of__a))
 
 let sexp_of_array sexp_of__a ar =
   let lst_ref = ref [] in
@@ -79,6 +88,26 @@ module Exn_converter = struct
 
   (* Fast and automatic exception registration *)
 
+  module String = struct
+    type t = string
+    external compare : t -> t -> int = "%compare"
+  end
+
+  module Exn_ids = Map.Make (String)
+
+  module Obj = struct
+    module Extension_constructor = struct
+
+      type t = extension_constructor
+
+      external id : t -> string = "%identity"
+
+      external%private of_val_internal : 'a -> t = "RE_EXN_ID" [@@mel.get]
+
+      let of_val exn = of_val_internal (Js.Exn.anyToExnInternal exn)
+    end
+  end
+
   module Registration = struct
     type t =
       { sexp_of_exn : exn -> Sexp.t
@@ -87,33 +116,48 @@ module Exn_converter = struct
       }
   end
 
-  module Exn_table = Ephemeron.K1.Make (struct
-    type t = extension_constructor
-
-    let equal = ( == )
-    let hash = Obj.Extension_constructor.id
-  end)
-
-  let the_exn_table : Registration.t Exn_table.t = Exn_table.create 17
+  (* extension_id's are strings in ReScript, so we don't need to worry about GC. *)
+  let exn_id_map
+    : Registration.t Exn_ids.t ref
+    =
+    ref Exn_ids.empty
+  ;;
 
   (* Ephemerons are used so that [sexp_of_exn] closure don't keep the
      extension_constructor live. *)
-  let add ?(printexc = true) ?finalise:_ extension_constructor sexp_of_exn =
-    Exn_table.add the_exn_table extension_constructor { sexp_of_exn; printexc }
+  let add ?(printexc = true) ?(finalise = true) extension_constructor sexp_of_exn =
+    let id = Obj.Extension_constructor.id extension_constructor in
+    let rec loop () =
+      let old_exn_id_map = !exn_id_map in
+      let new_exn_id_map = Exn_ids.add old_exn_id_map
+        ~key:id
+        ~data:({ sexp_of_exn; printexc } : Registration.t) in
+      (* This trick avoids mutexes and should be fairly efficient *)
+      if !exn_id_map != old_exn_id_map
+      then loop ()
+      else (exn_id_map := new_exn_id_map)
+    in
+    loop ()
+  [@@warning "-27"];;
+
+  let add_auto ?finalise exn sexp_of_exn =
+    add ?finalise (Obj.Extension_constructor.of_val exn) sexp_of_exn
   ;;
 
   let find_auto ~for_printexc exn =
-    let extension_constructor = Obj.Extension_constructor.of_val exn in
-    match Exn_table.find_opt the_exn_table extension_constructor with
-    | None -> None
-    | Some { sexp_of_exn; printexc } ->
-      (match for_printexc, printexc with
-       | false, _ | _, true -> Some (sexp_of_exn exn)
-       | true, false -> None)
+    let id = Obj.Extension_constructor.id (Obj.Extension_constructor.of_val exn) in
+    match Exn_ids.find id !exn_id_map with
+    | exception Not_found -> None
+    | { sexp_of_exn; printexc } ->
+         (match for_printexc, printexc with
+          | false, _ | _, true -> Some (sexp_of_exn exn)
+          | true, false -> None)
   ;;
 
   module For_unit_tests_only = struct
-    let size () = (Exn_table.stats_alive the_exn_table).num_bindings
+    let size () =
+      Exn_ids.fold !exn_id_map ~init:0 ~f:(fun ~key:_ ~data:_ acc -> acc + 1)
+    ;;
   end
 end
 
@@ -220,10 +264,11 @@ let int64_of_sexp sexp =
   | List _ -> of_sexp_error "int64_of_sexp: atom needed" sexp
 ;;
 
+(* Nativeint does not exist in ReScript *)
 let nativeint_of_sexp sexp =
   match sexp with
   | Atom str ->
-    (try Nativeint.of_string str with
+    (try Int32.of_string str with
      | exc -> of_sexp_error ("nativeint_of_sexp: " ^ exn_to_string exc) sexp)
   | List _ -> of_sexp_error "nativeint_of_sexp: atom needed" sexp
 ;;
@@ -272,7 +317,9 @@ let triple_of_sexp a__of_sexp b__of_sexp c__of_sexp sexp =
 
 let list_of_sexp a__of_sexp sexp =
   match sexp with
-  | List lst -> List.map lst ~f:a__of_sexp
+  | List lst ->
+    let rev_lst = List.rev_map lst ~f:a__of_sexp in
+    List.rev rev_lst
   | Atom _ -> of_sexp_error "list_of_sexp: list needed" sexp
 ;;
 
@@ -387,6 +434,10 @@ let () =
     ; ( [%extension_constructor Stack.Empty]
       , function
         | Stack.Empty -> Atom "Stack.Empty"
+        | _ -> assert false )
+    ; ( [%extension_constructor Scanf.Scan_failure]
+      , function
+        | Scanf.Scan_failure arg -> List [Atom "Scanf.Scan_failure"; Atom arg]
         | _ -> assert false )
     ; ( [%extension_constructor Sys.Break]
       , function

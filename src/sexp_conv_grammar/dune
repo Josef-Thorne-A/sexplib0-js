@@ -1,0 +1,6 @@
+(library
+ (name sexp_conv_grammar)
+ (public_name sexplib0.sexp_conv_grammar)
+ (modes native melange)
+ (libraries sexp_grammar sexp)
+ (synopsis ""))
