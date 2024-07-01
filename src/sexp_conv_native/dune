@@ -1,6 +1,5 @@
 (library
 (name sexplib_conv_native)
 (public_name sexplib0.sexp_conv_native)
-(libraries nativeint)
 (modes native)
 (implements sexplib0.sexp_conv))
