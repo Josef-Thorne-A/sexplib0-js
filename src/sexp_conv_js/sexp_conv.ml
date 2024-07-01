@@ -5,12 +5,6 @@ open MoreLabels
 open Printf
 open Sexp
 
-type sexp_bool = bool
-type 'a sexp_option = 'a option
-type 'a sexp_list = 'a list
-type 'a sexp_array = 'a array
-type 'a sexp_opaque = 'a
-
 (* Conversion of OCaml-values to S-expressions *)
 external format_float : string -> float -> string = "caml_format_float"
 
@@ -20,7 +14,7 @@ external format_float : string -> float -> string = "caml_format_float"
    which was converted from a decimal (string) with <= 15 significant digits.  So it's
    worth trying first to avoid things like "3.1400000000000001".
 
-   See comment above [to_string_round_trippable] in {!Core_kernel.Float} for
+   See comment above [to_string_round_trippable] in {!Core.Float} for
    detailed explanation and examples. *)
 let default_string_of_float =
   ref (fun x ->
@@ -28,10 +22,9 @@ let default_string_of_float =
     if float_of_string y = x then y else format_float "%.17G" x)
 ;;
 
-
 let read_old_option_format = ref true
 let write_old_option_format = ref true
-let list_map f l = List.rev (List.rev_map l ~f)
+let list_map f l = List.map l ~f
 let sexp_of_unit () = List []
 let sexp_of_bool b = Atom (string_of_bool b)
 let sexp_of_string str = Atom str
@@ -42,7 +35,7 @@ let sexp_of_float n = Atom (!default_string_of_float n)
 let sexp_of_int32 n = Atom (Int32.to_string n)
 let sexp_of_int64 n = Atom (Int64.to_string n)
 (* Nativeint does not exist in ReScript *)
-let sexp_of_nativeint (n:nativeint) = Atom (sprintf "%nd" n)
+let sexp_of_nativeint n = Atom (Nativeint.to_string n)
 let sexp_of_ref sexp_of__a rf = sexp_of__a !rf
 let sexp_of_lazy_t sexp_of__a lv = sexp_of__a (Lazy.force lv)
 
@@ -59,9 +52,7 @@ let sexp_of_triple sexp_of__a sexp_of__b sexp_of__c (a, b, c) =
   List [ sexp_of__a a; sexp_of__b b; sexp_of__c c ]
 ;;
 
-(* List.rev (List.rev_map ...) is tail recursive, the OCaml standard
-   library List.map is NOT. *)
-let sexp_of_list sexp_of__a lst = List (List.rev (List.rev_map lst ~f:sexp_of__a))
+let sexp_of_list sexp_of__a lst = List (List.map lst ~f:sexp_of__a)
 
 let sexp_of_array sexp_of__a ar =
   let lst_ref = ref [] in
@@ -141,9 +132,9 @@ module Exn_converter = struct
     loop ()
   [@@warning "-27"];;
 
-  let add_auto ?finalise exn sexp_of_exn =
-    add ?finalise (Obj.Extension_constructor.of_val exn) sexp_of_exn
-  ;;
+  (* let add_auto ?finalise exn sexp_of_exn =
+       add ?finalise (Obj.Extension_constructor.of_val exn) sexp_of_exn
+     ;; *)
 
   let find_auto ~for_printexc exn =
     let id = Obj.Extension_constructor.id (Obj.Extension_constructor.of_val exn) in
@@ -269,7 +260,7 @@ let int64_of_sexp sexp =
 let nativeint_of_sexp sexp =
   match sexp with
   | Atom str ->
-    (try Int32.of_string str with
+    (try Nativeint.of_string str with
      | exc -> of_sexp_error ("nativeint_of_sexp: " ^ exn_to_string exc) sexp)
   | List _ -> of_sexp_error "nativeint_of_sexp: atom needed" sexp
 ;;
@@ -318,9 +309,7 @@ let triple_of_sexp a__of_sexp b__of_sexp c__of_sexp sexp =
 
 let list_of_sexp a__of_sexp sexp =
   match sexp with
-  | List lst ->
-    let rev_lst = List.rev_map lst ~f:a__of_sexp in
-    List.rev rev_lst
+  | List lst -> List.map lst ~f:a__of_sexp
   | Atom _ -> of_sexp_error "list_of_sexp: list needed" sexp
 ;;
 
@@ -447,17 +436,17 @@ let () =
     ]
 ;;
 
-let () =
-  List.iter
-    ~f:(fun (extension_constructor, handler) ->
-      Exn_converter.add ~printexc:true ~finalise:false extension_constructor handler)
-    [ ( [%extension_constructor Of_sexp_error]
-      , function
-        | Of_sexp_error (exc, sexp) ->
-          List [ Atom "Sexplib.Conv.Of_sexp_error"; sexp_of_exn exc; sexp ]
-        | _ -> assert false )
-    ]
-;;
+(* let () =
+     List.iter
+       ~f:(fun (extension_constructor, handler) ->
+         Exn_converter.add ~printexc:true ~finalise:false extension_constructor handler)
+       [ ( [%extension_constructor Of_sexp_error]
+         , function
+           | Of_sexp_error (exc, sexp) ->
+             List [ Atom "Sexplib.Conv.Of_sexp_error"; sexp_of_exn exc; sexp ]
+           | _ -> assert false )
+       ]
+   ;; *)
 
 external ignore : _ -> unit = "%ignore"
 external ( = ) : 'a -> 'a -> bool = "%equal"
