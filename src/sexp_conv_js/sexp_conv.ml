@@ -41,7 +41,7 @@ let sexp_of_float n = Atom (!default_string_of_float n)
 let sexp_of_int32 n = Atom (Int32.to_string n)
 let sexp_of_int64 n = Atom (Int64.to_string n)
 (* Nativeint does not exist in ReScript *)
-let sexp_of_nativeint n = Atom (Int32.to_string n)
+let sexp_of_nativeint n = Atom (Nativeint.to_string n)
 let sexp_of_ref sexp_of__a rf = sexp_of__a !rf
 let sexp_of_lazy_t sexp_of__a lv = sexp_of__a (Lazy.force lv)
 
