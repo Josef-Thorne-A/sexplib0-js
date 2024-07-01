@@ -28,6 +28,7 @@ let default_string_of_float =
     if float_of_string y = x then y else format_float "%.17G" x)
 ;;
 
+
 let read_old_option_format = ref true
 let write_old_option_format = ref true
 let list_map f l = List.rev (List.rev_map l ~f)
@@ -41,7 +42,7 @@ let sexp_of_float n = Atom (!default_string_of_float n)
 let sexp_of_int32 n = Atom (Int32.to_string n)
 let sexp_of_int64 n = Atom (Int64.to_string n)
 (* Nativeint does not exist in ReScript *)
-let sexp_of_nativeint n = Atom (Nativeint.to_string n)
+let sexp_of_nativeint (n:nativeint) = Atom (sprintf "%nd" n)
 let sexp_of_ref sexp_of__a rf = sexp_of__a !rf
 let sexp_of_lazy_t sexp_of__a lv = sexp_of__a (Lazy.force lv)
 

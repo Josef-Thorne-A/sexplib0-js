@@ -1,7 +1,7 @@
 (library
 (public_name sexplib0.sexp_conv)
 (name sexp_conv)
-(libraries sexp sexp_conv_grammar)
+(libraries sexp sexp_conv_grammar nativeint)
 (modes native melange)
 (default_implementation sexplib0.sexp_conv_native)
 (virtual_modules sexp_conv))
