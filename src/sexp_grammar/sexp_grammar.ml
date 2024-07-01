@@ -125,9 +125,16 @@ and enum =
   ; names : string list
   }
 
+and case_sensitivity =
+  | Case_insensitive (** Comparison is case insensitive. Used for custom parsers. *)
+  | Case_sensitive (** Comparison is case sensitive. Used for polymorphic variants. *)
+  | Case_sensitive_except_first_character
+      (** Comparison is case insensitive for the first character and case sensitive afterward.
+      Used for regular variants. *)
+
 (** Grammar of variants. Accepts any sexp matching one of the clauses. *)
 and variant =
-  { name_kind : name_kind
+  { case_sensitivity : case_sensitivity
   ; clauses : clause list
   }
 
